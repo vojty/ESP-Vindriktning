@@ -1,0 +1,17 @@
+# Rust often needs a bit of an extra main task stack size compared to C (the default is 3K)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=7000
+
+# Increase stack, otherwise we get a stack overflow in the main task when setting up the wifi
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+
+# Use this to set FreeRTOS kernel tick frequency to 1000 Hz (100 Hz by default).
+# This allows to use 1 ms granuality for thread sleeps (10 ms by default).
+#CONFIG_FREERTOS_HZ=1000
+
+# Workaround for https://github.com/espressif/esp-idf/issues/7631
+#CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n
+#CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=n
+
+# https://esp-rs.github.io/book/overview/using-the-standard-library.html?highlight=watchdog#how-can-i-completely-disable-the-watchdog-timers
+CONFIG_INT_WDT=n
+CONFIG_ESP_TASK_WDT=n
