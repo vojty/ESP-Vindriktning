@@ -1,20 +1,19 @@
 use anyhow::*;
-use board::Board;
-use embedded_svc::httpd::registry::*;
-use embedded_svc::httpd::Response;
-
+use embedded_svc::http::Method;
+use embedded_svc::io::Read;
+use embedded_svc::io::Write;
 use esp_idf_hal::prelude::Peripherals;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::httpd as idf;
-
+use esp_idf_svc::http::server::EspHttpServer;
 use esp_idf_sys as _;
-use leds::{Color, LedPosition, Leds};
-// If using the `binstart` feature of `esp-idf-sys`, always keep this module imported
 use log::*;
 use serde::Serialize;
 use std::result::Result::Ok;
 use std::sync::Arc;
 use std::sync::RwLock;
+
+use board::Board;
+use leds::{Color, LedPosition, Leds};
 use utils::{get_co2_color, get_pm25_color, sleep_ms};
 
 mod board;
@@ -25,40 +24,52 @@ mod scd41;
 mod utils;
 mod wifi;
 
-fn httpd(data: Arc<RwLock<MeasuredData>>, leds: Arc<RwLock<Leds>>) -> Result<idf::Server> {
-    let server = idf::ServerRegistry::new()
-        .at("/")
-        .get({
-            let data = data.clone();
-            move |_| {
-                let data = data.read().unwrap();
-                let json = serde_json::to_string(&*data).unwrap();
-                let response = Response::new(200)
-                    .content_type("application/json")
-                    .body(json.into());
-                Ok(response)
-            }
-        })?
-        .at("/brightness")
-        .put(move |mut req| {
-            let body = req.as_string().unwrap();
-            let brightness: u8 = serde_json::from_str(&body).unwrap();
+fn httpd(data: Arc<RwLock<MeasuredData>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpServer> {
+    let mut server = EspHttpServer::new(&Default::default())?;
 
-            let mut data = data.write().unwrap();
-            data.brightness = brightness;
-            info!("Brightness set to {}", brightness);
+    server.fn_handler("/", Method::Get, {
+        let data = data.clone();
+        move |req| {
+            let data = data.read().unwrap();
+            let json = serde_json::to_string(&*data).unwrap();
 
-            leds.write().unwrap().set_brightness(brightness);
-            leds.write().unwrap().flush();
-            Ok(Response::new(200))
-        })?
-        .at("/restart")
-        .get(|_| {
-            // this will cause a restart
-            panic!("User requested a restart!")
-        })?;
+            req.into_ok_response()?.write_all(&json.into_bytes())?;
 
-    server.start(&Default::default())
+            Ok(())
+        }
+    })?;
+
+    server.fn_handler("/brightness", Method::Put, move |mut req| {
+        let length = req
+            .connection()
+            .header("Content-Length")
+            .unwrap()
+            .parse::<usize>()
+            .unwrap();
+
+        let mut buffer = vec![0; length];
+        req.read(&mut buffer)?;
+        let s = match std::str::from_utf8(&buffer) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        let brightness: u8 = serde_json::from_str(s).unwrap();
+
+        let mut data = data.write().unwrap();
+        data.brightness = brightness;
+        info!("Brightness set to {}", brightness);
+        leds.write().unwrap().set_brightness(brightness);
+        leds.write().unwrap().flush();
+
+        req.into_ok_response();
+        Ok(())
+    })?;
+
+    server.fn_handler("/restart", Method::Post, |_req| {
+        // this will cause a restart
+        panic!("User requested a restart!")
+    })?;
+    Ok(server)
 }
 
 #[derive(Serialize, Default)]
