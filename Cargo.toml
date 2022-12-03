@@ -32,6 +32,7 @@ ws2812-esp32-rmt-driver = "0.4.0"
 smart-leds-trait = "0.2.1"
 serde = "1.0.147"
 serde_json = "1.0.88"
+sntp_request = "2.0.0"
 
 [build-dependencies]
 embuild = "0.30.4"

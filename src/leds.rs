@@ -78,7 +78,7 @@ impl Leds {
         self.driver.write(self.colors.iter().cloned())
     }
 
-    pub fn set_brightness(&mut self, brightness: u8) {
+    pub fn set_brightness(&mut self, brightness: u8) -> &mut Leds {
         self.brightness = Some(brightness);
         self.colors
             .iter_mut()
@@ -91,9 +91,10 @@ impl Leds {
                     // keep the middle led untouched
                 }
             });
+        self
     }
 
-    pub fn set_color(&mut self, position: LedPosition, mut color: Color) {
+    pub fn set_color(&mut self, position: LedPosition, mut color: Color) -> &mut Leds {
         if let Some(brightness) = self.brightness {
             if color.brightness.is_none() {
                 color = color.brightness(brightness);
@@ -101,5 +102,6 @@ impl Leds {
         }
 
         self.colors[position as usize] = color;
+        self
     }
 }

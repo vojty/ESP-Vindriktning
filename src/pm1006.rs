@@ -6,13 +6,12 @@ pub struct Pm1006<'a> {
     read_buffer: [u8; 20],
 }
 
-#[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub enum Error {
     InvalidHeader(u8),
     InvalidCommandResponse(u8),
     InvalidChecksum(u8),
-    SerialError(EspError),
+    Serial(EspError),
 }
 
 /*
@@ -93,7 +92,7 @@ impl<'a> Pm1006<'a> {
         }
     }
 
-    pub fn read_pm2(&mut self) -> Result<u16, Error> {
+    pub fn read_pm25(&mut self) -> Result<u16, Error> {
         self.send_command()?;
 
         self.read_data()?;
@@ -106,13 +105,13 @@ impl<'a> Pm1006<'a> {
     fn send_command(&mut self) -> Result<usize, Error> {
         self.uart_driver
             .write(&COMMAND_SEQUENCE)
-            .map_err(Error::SerialError)
+            .map_err(Error::Serial)
     }
 
     fn read_data(&mut self) -> Result<usize, Error> {
         self.uart_driver
             .read(&mut self.read_buffer, BLOCK)
-            .map_err(Error::SerialError)
+            .map_err(Error::Serial)
     }
 }
 

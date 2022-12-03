@@ -60,4 +60,8 @@ impl Board<'_> {
             fan,
         }
     }
+
+    pub fn init(&mut self) {
+        self.scd41.init().unwrap();
+    }
 }
