@@ -12,9 +12,9 @@ Upgraded Ikea Vindriktning with ESP32
 
 ### Basic features
 
-- Air quality measurement (PM2.5 + CO2)
+- Air quality monitoring (PM2.5 + CO2)
 - Smart LEDs for displaying results
-- Simple HTTP server (using WiFI) for various stuff (_work in-progress_)
+- Simple HTTP server (over WiFi) for various stuff (_work in-progress_)
 
 ## Lifecycle
 
@@ -33,20 +33,37 @@ TODO
 - ESP32 board https://www.laskakit.cz/laskakit-esp-vindriktning-esp-32-i2c/
 - SCD41 CO2 sensor https://www.laskakit.cz/laskakit-scd41-senzor-co2--teploty-a-vlhkosti-vzduchu/
 
+## Development
+
+1. Install `espup` (https://github.com/esp-rs/espup#installation)
+
+```
+cargo install espup
+```
+
+2. Install toolchains
+
+```
+espup install --esp-idf-version 4.4
+```
+
+3. Set up the environment variables running: `source ~/export-esp.sh`. **This step must be done every time you open a new terminal.**
+
+4. To make this work with `rust-analyzer`, edit `.vscode/settings.json` like this:
+
+```
+  "rust-analyzer.server.extraEnv": {
+    "LIBCLANG_PATH": "the same path as in ~/export-esp.sh, has to be absolute"
+  },
+```
+
+## Flashing
+
+```
+make flash
+```
+
 ## Notes
-
-- needs custom fork of Rust to support ESP chips <s>https://github.com/esp-rs/rust-build</s> now via https://github.com/esp-rs/espup
-- <s>to update Rust ESP version, run `./install-rust-toolchain.sh --toolchain-version 1.xx.0.0`</s> now via `espup`
-- `cargo build` needs `source export-esp.sh` first
-- to make this work with `rust-analyzer`, add this to your config:
-
-  ```json
-    "rust-analyzer.server.extraEnv": {
-      "LIBCLANG_PATH": "/Users/tomas.vojtasek/.espressif/tools/xtensa-esp32-elf-clang/esp-14.0.0-20220415-aarch64-apple-darwin/lib/"
-    },
-  ```
-
-  The path has to be absolute, won't work with the leading `~/`
 
 - binary larger than 1 MB won't flash without `partition.csv` file (1MB is probably a default value)
 
