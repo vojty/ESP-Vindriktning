@@ -1,15 +1,7 @@
-use esp_idf_hal::delay;
-use esp_idf_hal::gpio;
-use esp_idf_hal::gpio::PinDriver;
-use esp_idf_hal::gpio::Pins;
-use esp_idf_hal::i2c::I2cConfig;
-use esp_idf_hal::i2c::I2cDriver;
-use esp_idf_hal::i2c::I2C1;
-use esp_idf_hal::uart::UartConfig;
-use esp_idf_hal::uart::UartDriver;
-use esp_idf_hal::uart::UART1;
-use esp_idf_hal::units::Hertz;
-use esp_idf_hal::units::KiloHertz;
+use esp_idf_svc::hal::{
+    delay, gpio, gpio::PinDriver, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1,
+    uart::UartConfig, uart::UartDriver, uart::UART1, units::Hertz, units::KiloHertz,
+};
 
 use crate::fan::Fan;
 use crate::leds::Leds;

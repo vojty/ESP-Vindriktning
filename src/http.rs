@@ -1,5 +1,5 @@
 use embedded_svc::http::server::{Connection, HandlerError, Request};
-use embedded_svc::io::{Read, Write};
+use embedded_svc::io::Write;
 use serde::Serialize;
 use serde_json::Result;
 

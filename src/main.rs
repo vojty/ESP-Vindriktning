@@ -1,9 +1,8 @@
 use anyhow::*;
 use embedded_svc::http::Method;
-use esp_idf_hal::prelude::Peripherals;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
+use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::http::server::EspHttpServer;
-use esp_idf_sys as _;
 use http::SendJson;
 use log::*;
 use serde::Serialize;
@@ -28,7 +27,7 @@ mod scd41;
 mod utils;
 mod wifi;
 
-fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpServer> {
+fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpServer<'static>> {
     let mut server = EspHttpServer::new(&Default::default())?;
 
     server.fn_handler("/data", Method::Get, {
@@ -78,7 +77,7 @@ struct State {
 fn main() -> Result<()> {
     // Temporary. Will disappear once ESP-IDF 4.4 is released, but for now it is necessary to call this function once,
     // or else some patches to the runtime implemented by esp-idf-sys might not link properly.
-    esp_idf_sys::link_patches();
+    esp_idf_svc::sys::link_patches();
 
     // Bind the log crate to the ESP Logging facilities
     esp_idf_svc::log::EspLogger::initialize_default();

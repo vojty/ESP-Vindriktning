@@ -1,5 +1,5 @@
-use esp_idf_hal::gpio::{Output, Pin, PinDriver};
-use esp_idf_sys::EspError;
+use esp_idf_svc::hal::gpio::{Output, Pin, PinDriver};
+use esp_idf_svc::sys::EspError;
 
 pub struct Fan<'a, PIN: Pin> {
     pin: PinDriver<'a, PIN, Output>,

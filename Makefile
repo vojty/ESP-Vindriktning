@@ -1,5 +1,9 @@
-build:
-	cargo build --release
+bin:
+	cargo espflash save-image \
+		--chip esp32 \
+		--release \
+		--target xtensa-esp32-espidf \
+		./target/firmware.bin
 
 flash:
 	cargo espflash flash \
