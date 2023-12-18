@@ -22,6 +22,7 @@ mod clock;
 mod fan;
 mod http;
 mod leds;
+mod logging;
 mod pm1006;
 mod scd41;
 mod utils;
@@ -162,6 +163,12 @@ fn main() -> Result<()> {
             .set_color(LedPosition::Top, co2_color.brightness(brightness))
             .flush()
             .unwrap();
+
+        // Log data
+        match logging::log_data(&logging::LogEntry::new(co2, pm25)) {
+            Ok(_) => info!("Data logged successfully"),
+            Err(e) => error!("Error logging data: {}", e),
+        }
 
         sleep_ms(50_000);
     }

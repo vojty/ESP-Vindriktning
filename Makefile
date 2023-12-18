@@ -8,11 +8,10 @@ bin:
 flash:
 	cargo espflash flash \
 		--release \
-		--use-stub \
 		--baud 460800 \
 		--monitor \
-		--flash-freq 40M \
+		--flash-freq 40mhz \
 		--target xtensa-esp32-espidf
 
 monitor:
-	cargo espmonitor --no-reset
+	cargo espflash monitor
