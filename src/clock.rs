@@ -2,7 +2,7 @@ use log::*;
 use sntp_request::SntpRequest;
 use std::time::Instant;
 use time::OffsetDateTime;
-use time_tz::{timezones, OffsetDateTimeExt, Tz};
+use time_tz::{timezones, OffsetDateTimeExt, TimeZone, Tz};
 
 pub struct Clock {
     sntp: SntpRequest,
@@ -17,7 +17,7 @@ impl Clock {
     pub fn new() -> Self {
         let sntp = SntpRequest::new();
         let timezone = timezones::get_by_name(TIMEZONE).unwrap_or(timezones::db::GMT);
-        info!("Timezone: {:?}", timezone);
+        info!("Timezone: {:?}", timezone.name());
         Self {
             timezone,
             timestamp: 0,
