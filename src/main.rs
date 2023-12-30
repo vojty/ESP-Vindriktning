@@ -28,7 +28,6 @@ mod fan;
 mod http;
 mod leds;
 mod logging;
-mod pm1006;
 mod scd41;
 mod utils;
 mod wifi;

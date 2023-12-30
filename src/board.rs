@@ -2,20 +2,20 @@ use esp_idf_svc::hal::{
     delay, gpio, gpio::PinDriver, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1,
     uart::UartConfig, uart::UartDriver, uart::UART1, units::Hertz, units::KiloHertz,
 };
+use pm1006::pm1006::Pm1006;
 
 use crate::fan::Fan;
 use crate::leds::Leds;
-use crate::pm1006::Pm1006;
 use crate::scd41::Scd41;
 
-pub struct Board<'a> {
-    pub scd41: Scd41<I2cDriver<'a>, delay::FreeRtos>,
-    pub pm1006: Pm1006<'a>,
+pub struct Board {
+    pub scd41: Scd41<I2cDriver<'static>, delay::FreeRtos>,
+    pub pm1006: Pm1006<UartDriver<'static>>,
     pub leds: Leds,
-    pub fan: Fan<'a, gpio::Gpio12>,
+    pub fan: Fan<'static, gpio::Gpio12>,
 }
 
-impl Board<'_> {
+impl Board {
     pub fn new(pins: Pins, i2c1: I2C1, uart1: UART1) -> Self {
         // Fan
         let fan_pin = PinDriver::output(pins.gpio12).unwrap();
