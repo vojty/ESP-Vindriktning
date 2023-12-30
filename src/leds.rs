@@ -1,6 +1,8 @@
 use smart_leds_trait::{SmartLedsWrite, RGB8};
 use ws2812_esp32_rmt_driver::{driver::color::LedPixelColorGrb24, LedPixelEsp32Rmt};
 
+use crate::utils::{get_co2_color, get_pm25_color};
+
 const LED_PIN: u32 = 25;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -32,7 +34,7 @@ impl Color {
         }
     }
 
-    pub fn brightness(&self, brightness: u8) -> Self {
+    fn brightness(&self, brightness: u8) -> Self {
         Self {
             r: self.r,
             g: self.g,
@@ -61,8 +63,10 @@ pub enum LedPosition {
 pub struct Leds {
     colors: [Color; 3],
     driver: LedPixelEsp32Rmt<RGB8, LedPixelColorGrb24>,
-    brightness: Option<u8>,
+    brightness: u8,
 }
+
+pub const INITIAL_BRIGHTNESS: u8 = 20;
 
 impl Leds {
     pub fn new() -> Self {
@@ -70,7 +74,7 @@ impl Leds {
         Self {
             driver,
             colors: [Color::default(); 3],
-            brightness: None,
+            brightness: INITIAL_BRIGHTNESS,
         }
     }
 
@@ -79,29 +83,51 @@ impl Leds {
     }
 
     pub fn set_brightness(&mut self, brightness: u8) -> &mut Leds {
-        self.brightness = Some(brightness);
-        self.colors
-            .iter_mut()
-            .enumerate()
-            .for_each(|(index, color)| match index {
-                0 | 2 => {
-                    *color = color.brightness(brightness);
-                }
-                _ => {
-                    // keep the middle led untouched
-                }
-            });
+        self.brightness = brightness;
+        self.colors.iter_mut().for_each(|color| {
+            *color = color.brightness(brightness);
+        });
         self
     }
 
     pub fn set_color(&mut self, position: LedPosition, mut color: Color) -> &mut Leds {
-        if let Some(brightness) = self.brightness {
-            if color.brightness.is_none() {
-                color = color.brightness(brightness);
-            }
-        }
+        color = color.brightness(self.brightness);
 
         self.colors[position as usize] = color;
         self
+    }
+
+    pub fn get_brightness(&self) -> u8 {
+        self.brightness
+    }
+}
+
+impl Leds {
+    pub fn set_initial_color(&mut self) {
+        let initial_color = Color::new(255, 0, 255); // Fuchsia / Magenta / Violet
+        self.set_color(LedPosition::Top, initial_color)
+            .set_color(LedPosition::Bottom, initial_color)
+            .set_color(LedPosition::Center, initial_color)
+            .flush()
+            .unwrap();
+    }
+
+    pub fn set_waiting_color(&mut self) {
+        let waiting_color = Color::new(0, 255, 255); // cyan
+        self.set_color(LedPosition::Top, waiting_color)
+            .set_color(LedPosition::Bottom, waiting_color)
+            .set_color(LedPosition::Center, waiting_color)
+            .flush()
+            .unwrap();
+    }
+
+    pub fn visualize_measures(&mut self, co2: u16, pm25: u16) {
+        let co2_color = get_co2_color(co2);
+        let pm25_color = get_pm25_color(pm25);
+        self.set_color(LedPosition::Top, co2_color)
+            .set_color(LedPosition::Center, pm25_color.mix(&co2_color))
+            .set_color(LedPosition::Bottom, pm25_color)
+            .flush()
+            .unwrap();
     }
 }

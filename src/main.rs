@@ -3,19 +3,24 @@ use embedded_svc::http::Method;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::prelude::Peripherals;
 use esp_idf_svc::http::server::EspHttpServer;
-use http::SendJson;
+use esp_idf_svc::timer::EspTaskTimerService;
+use esp_idf_svc::wifi::WifiEvent;
 use log::*;
 use serde::Serialize;
 use std::result::Result::Ok;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
+use std::time::Duration;
 
 use board::Board;
-use leds::{Color, LedPosition, Leds};
-use utils::{get_co2_color, get_pm25_color, sleep_ms};
-
-use crate::clock::Clock;
-use crate::http::BodyParser;
+use clock::Clock;
+use http::BodyParser;
+use http::SendJson;
+use leds::Leds;
+use leds::INITIAL_BRIGHTNESS;
+use utils::sleep_ms;
+use wifi::WifiConnectFix;
 
 mod board;
 mod clock;
@@ -75,6 +80,25 @@ struct State {
     settings: Settings,
 }
 
+fn set_brightness(leds: &Arc<RwLock<Leds>>, clock: &Arc<Mutex<Clock>>) {
+    let datetime = clock.lock().unwrap().get_datetime().unwrap();
+
+    let new_brightness = if datetime.hour() >= 22 || datetime.hour() < 6 {
+        1
+    } else {
+        INITIAL_BRIGHTNESS
+    };
+
+    if new_brightness != leds.read().unwrap().get_brightness() {
+        info!("Setting brightness to {}", new_brightness);
+        leds.write()
+            .unwrap()
+            .set_brightness(new_brightness)
+            .flush()
+            .unwrap();
+    }
+}
+
 fn main() -> Result<()> {
     // Temporary. Will disappear once ESP-IDF 4.4 is released, but for now it is necessary to call this function once,
     // or else some patches to the runtime implemented by esp-idf-sys might not link properly.
@@ -97,41 +121,53 @@ fn main() -> Result<()> {
     let mut board = Board::new(pins, i2c1, uart1);
     board.init();
 
-    let initial_brightness = 20;
-    // Set initial color
-    let initial_color = Color::new(255, 0, 255).brightness(initial_brightness); // Fuchsia / Magenta / Violet
-    board
-        .leds
-        .set_color(LedPosition::Top, initial_color)
-        .set_color(LedPosition::Bottom, initial_color)
-        .set_color(LedPosition::Center, initial_color)
-        .flush()
-        .unwrap();
+    // Init color
+    board.leds.set_initial_color();
 
     // Setup wifi
-    let _wifi = wifi::wifi(modem, sysloop)?;
+    let mut blocking_wifi = wifi::wifi(modem, sysloop.clone())?;
+    // Try to reconnect if we get disconnected
+    let _sub = sysloop.subscribe(move |parsed_event: &WifiEvent| {
+        if *parsed_event == WifiEvent::StaDisconnected {
+            blocking_wifi.connect_with_retry().unwrap();
+        }
+    })?;
 
-    let waiting_color = Color::new(0, 255, 255).brightness(initial_brightness); // cyan
-    board
-        .leds
-        .set_color(LedPosition::Top, waiting_color)
-        .set_color(LedPosition::Bottom, waiting_color)
-        .set_color(LedPosition::Center, waiting_color)
-        .flush()
-        .unwrap();
+    // Wait for data
+    board.leds.set_waiting_color();
 
     // NTP client
-    let clock = Clock::new();
+    let clock = Arc::new(Mutex::new(Clock::new()));
+    clock.lock().unwrap().sync();
+    // Sync clock every minute
+    let clock_sync_timer = EspTaskTimerService::new()?.timer({
+        let clock = clock.clone();
+        move || {
+            clock.lock().unwrap().sync();
+        }
+    })?;
+    clock_sync_timer.every(Duration::from_secs(60))?;
 
     let state = State {
         measured_data: MeasuredData::default(),
         settings: Settings {
-            brightness: initial_brightness,
+            brightness: INITIAL_BRIGHTNESS,
         },
     };
     let state = Arc::new(RwLock::new(state));
     let leds = Arc::new(RwLock::new(board.leds));
     let _server = httpd(state.clone(), leds.clone())?;
+
+    // Schedule timer for night mode
+    set_brightness(&leds, &clock);
+    let night_mode_timer = EspTaskTimerService::new()?.timer({
+        let leds = leds.clone();
+        let clock = clock.clone();
+        move || {
+            set_brightness(&leds, &clock);
+        }
+    })?;
+    night_mode_timer.every(Duration::from_secs(60))?;
 
     loop {
         // Get fresh air
@@ -147,22 +183,10 @@ fn main() -> Result<()> {
         // Store data
         state.write().unwrap().measured_data.co2 = co2;
         state.write().unwrap().measured_data.pm25 = pm25;
-        state.write().unwrap().measured_data.timestamp = clock.get_timestamp().ok();
-
-        let co2_color = get_co2_color(co2);
-        let pm25_color = get_pm25_color(pm25);
-        let brightness = state.read().unwrap().settings.brightness;
+        state.write().unwrap().measured_data.timestamp = clock.lock().unwrap().get_unix_timestamp();
 
         // Update LEDs
-        let mut leds = leds.write().unwrap();
-        leds.set_color(LedPosition::Bottom, pm25_color.brightness(brightness))
-            .set_color(
-                LedPosition::Center,
-                pm25_color.mix(&co2_color).brightness(10),
-            )
-            .set_color(LedPosition::Top, co2_color.brightness(brightness))
-            .flush()
-            .unwrap();
+        leds.write().unwrap().visualize_measures(co2, pm25);
 
         // Log data
         match logging::log_data(&logging::LogEntry::new(co2, pm25)) {

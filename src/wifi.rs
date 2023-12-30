@@ -1,5 +1,4 @@
-use anyhow::*;
-use embedded_svc::wifi::{AccessPointConfiguration, ClientConfiguration, Configuration};
+use embedded_svc::wifi::{ClientConfiguration, Configuration};
 use esp_idf_svc::hal::peripheral;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
@@ -7,18 +6,58 @@ use esp_idf_svc::{
 };
 use log::*;
 
+use crate::utils::sleep_ms;
+
 const WIFI_SSID: &str = env!("WIFI_SSID");
 const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
-const WIFI_NAME: &str = env!("WIFI_NAME");
+
+/**
+ * This is a workaround for a bug in the ESP-IDF wifi stack.
+ * see https://github.com/esp-rs/esp-idf-svc/issues/304#issuecomment-1865823612
+ */
+pub trait WifiConnectFix {
+    fn connect_with_retry(&mut self) -> anyhow::Result<()>;
+}
+
+impl WifiConnectFix for BlockingWifi<EspWifi<'_>> {
+    fn connect_with_retry(&mut self) -> anyhow::Result<()> {
+        let mut retry_delay_ms = 1_000;
+        loop {
+            info!("Connecting wifi...");
+            match self.connect() {
+                Ok(()) => break,
+                Err(e) => {
+                    warn!(
+                        "Wifi connect failed, reason {}, retrying in {}s",
+                        e,
+                        retry_delay_ms / 1000
+                    );
+                    sleep_ms(retry_delay_ms);
+
+                    // increase the delay exponentially, but cap it at 10s
+                    retry_delay_ms = std::cmp::min(retry_delay_ms * 2, 10_000);
+
+                    self.stop()?;
+                    self.start()?;
+                }
+            }
+        }
+
+        info!("Waiting for DHCP lease...");
+
+        self.wait_netif_up()?;
+        Ok(())
+    }
+}
 
 // https://github.com/ivmarkov/rust-esp32-std-demo/blob/main/src/main.rs#L1266
 pub fn wifi(
     modem: impl peripheral::Peripheral<P = esp_idf_svc::hal::modem::Modem> + 'static,
     sysloop: EspSystemEventLoop,
-) -> Result<Box<EspWifi<'static>>> {
-    let mut esp_wifi = EspWifi::new(modem, sysloop.clone(), None)?;
+) -> anyhow::Result<BlockingWifi<EspWifi<'static>>> {
+    let esp_wifi = EspWifi::new(modem, sysloop.clone(), None)?;
 
-    let mut wifi = BlockingWifi::wrap(&mut esp_wifi, sysloop)?;
+    let mut wifi = BlockingWifi::wrap(esp_wifi, sysloop)?;
 
     wifi.set_configuration(&Configuration::Client(ClientConfiguration::default()))?;
 
@@ -46,33 +85,20 @@ pub fn wifi(
         None
     };
 
-    wifi.set_configuration(&Configuration::Mixed(
-        ClientConfiguration {
-            ssid: WIFI_SSID.into(),
-            password: WIFI_PASSWORD.into(),
-            channel,
-            ..Default::default()
-        },
-        AccessPointConfiguration {
-            ssid: WIFI_NAME.into(),
-            channel: channel.unwrap_or(1),
-            ..Default::default()
-        },
-    ))?;
+    wifi.set_configuration(&Configuration::Client(ClientConfiguration {
+        ssid: WIFI_SSID.into(),
+        password: WIFI_PASSWORD.into(),
+        channel,
+        ..Default::default()
+    }))?;
 
     wifi.start()?;
 
-    info!("Connecting wifi...");
-
-    wifi.connect()?;
-
-    info!("Waiting for DHCP lease...");
-
-    wifi.wait_netif_up()?;
+    wifi.connect_with_retry()?;
 
     let ip_info = wifi.wifi().sta_netif().get_ip_info()?;
 
     info!("Wifi DHCP info: {:?}", ip_info);
 
-    Ok(Box::new(esp_wifi))
+    Ok(wifi)
 }

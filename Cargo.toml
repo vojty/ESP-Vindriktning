@@ -26,6 +26,7 @@ opt-level = "z"
 [dependencies]
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 embedded-hal = "0.2.7"
+embedded-io = "0.6.1"
 embedded-svc= "0.26.2"
 esp-idf-svc = "0.47.3"
 log = "0.4.20"
@@ -34,6 +35,8 @@ serde = "1.0.192"
 serde_json = "1.0.108"
 smart-leds-trait = "0.2.1"
 sntp_request = "2.0.1"
+time = "0.3.31"
+time-tz = { version = "2.0.0", features = ["db"] }
 ws2812-esp32-rmt-driver = "0.6.0"
 
 [build-dependencies]
