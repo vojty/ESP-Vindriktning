@@ -39,6 +39,12 @@ impl Board {
         )
         .unwrap();
 
+        // Clear RX buffer to avoid reading old data
+        match uart_driver.clear_rx() {
+            Ok(_) => log::info!("Cleared RX buffer"),
+            Err(e) => log::warn!("Failed to clear RX buffer: {}", e),
+        }
+
         let pm1006 = Pm1006::new(uart_driver);
 
         // LEDs

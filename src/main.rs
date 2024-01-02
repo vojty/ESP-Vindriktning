@@ -175,8 +175,14 @@ fn main() -> Result<()> {
         board.fan.disable().unwrap();
 
         // Read data
-        let co2 = board.scd41.read_co2().unwrap();
-        let pm25 = board.pm1006.read_pm25().unwrap();
+        let co2 = board.scd41.read_co2().unwrap_or_else(|e| {
+            error!("Error reading CO2: {:?}", e);
+            0
+        });
+        let pm25 = board.pm1006.read_pm25().unwrap_or_else(|e| {
+            error!("Error reading PM2.5: {:?}", e);
+            0
+        });
         info!("CO2: {} ppm, PM2.5: {} ug/m3", co2, pm25);
 
         // Store data
