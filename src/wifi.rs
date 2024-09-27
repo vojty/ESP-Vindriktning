@@ -1,5 +1,6 @@
 use embedded_svc::wifi::{ClientConfiguration, Configuration};
 use esp_idf_svc::hal::peripheral;
+use esp_idf_svc::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
     wifi::{BlockingWifi, EspWifi},
@@ -65,6 +66,12 @@ pub fn wifi(
 
     wifi.start()?;
 
+    // https://github.com/espressif/arduino-esp32/issues/6767
+    // https://github.com/espressif/arduino-esp32/blob/0ef29868749865e754c62595e4b16e7da24608c0/libraries/WiFi/src/WiFiGeneric.cpp#L637
+    unsafe {
+        esp_wifi_set_max_tx_power(34);
+    }
+
     info!("Scanning...");
 
     let ap_infos = wifi.scan()?;
@@ -86,8 +93,8 @@ pub fn wifi(
     };
 
     wifi.set_configuration(&Configuration::Client(ClientConfiguration {
-        ssid: WIFI_SSID.into(),
-        password: WIFI_PASSWORD.into(),
+        ssid: WIFI_SSID.try_into().unwrap(),
+        password: WIFI_PASSWORD.try_into().unwrap(),
         channel,
         ..Default::default()
     }))?;

@@ -1,9 +1,8 @@
+use esp_idf_svc::hal::{gpio::OutputPin, peripheral::Peripheral, rmt::RmtChannel};
 use smart_leds_trait::{SmartLedsWrite, RGB8};
 use ws2812_esp32_rmt_driver::{driver::color::LedPixelColorGrb24, LedPixelEsp32Rmt};
 
 use crate::utils::{get_co2_color, get_pm25_color};
-
-const LED_PIN: u32 = 25;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color {
@@ -62,15 +61,18 @@ pub enum LedPosition {
 
 pub struct Leds {
     colors: [Color; 3],
-    driver: LedPixelEsp32Rmt<RGB8, LedPixelColorGrb24>,
+    driver: LedPixelEsp32Rmt<'static, RGB8, LedPixelColorGrb24>,
     brightness: u8,
 }
 
 pub const INITIAL_BRIGHTNESS: u8 = 20;
 
 impl Leds {
-    pub fn new() -> Self {
-        let driver = LedPixelEsp32Rmt::<RGB8, LedPixelColorGrb24>::new(0, LED_PIN).unwrap();
+    pub fn new<C: RmtChannel>(
+        channel: impl Peripheral<P = C> + 'static,
+        pin: impl Peripheral<P = impl OutputPin> + 'static,
+    ) -> Self {
+        let driver = LedPixelEsp32Rmt::<RGB8, LedPixelColorGrb24>::new(channel, pin).unwrap();
         Self {
             driver,
             colors: [Color::default(); 3],

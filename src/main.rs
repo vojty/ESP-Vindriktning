@@ -43,7 +43,7 @@ fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpSe
         }
     })?;
 
-    server.fn_handler("/brightness", Method::Put, move |mut req| {
+    server.fn_handler::<anyhow::Error, _>("/brightness", Method::Put, move |mut req| {
         let brightness: u8 = req.parse_body().unwrap();
         state.write().unwrap().settings.brightness = brightness;
         info!("Brightness set to {}", brightness);
@@ -54,7 +54,7 @@ fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpSe
         Ok(())
     })?;
 
-    server.fn_handler("/restart", Method::Post, |_req| {
+    server.fn_handler::<anyhow::Error, _>("/restart", Method::Post, |_req| {
         // panic will cause a restart of the device
         panic!("User requested a restart!")
     })?;
@@ -113,11 +113,12 @@ fn main() -> Result<()> {
         pins,
         i2c1,
         uart1,
+        rmt,
         ..
     } = peripherals;
 
     // Create board
-    let mut board = Board::new(pins, i2c1, uart1);
+    let mut board = Board::new(pins, i2c1, uart1, rmt);
     board.init();
 
     // Init color
@@ -126,9 +127,12 @@ fn main() -> Result<()> {
     // Setup wifi
     let mut blocking_wifi = wifi::wifi(modem, sysloop.clone())?;
     // Try to reconnect if we get disconnected
-    let _sub = sysloop.subscribe(move |parsed_event: &WifiEvent| {
-        if *parsed_event == WifiEvent::StaDisconnected {
-            blocking_wifi.connect_with_retry().unwrap();
+    let _wifi_reconnect_sub = sysloop.subscribe::<WifiEvent, _>({
+        move |parsed_event| {
+            log::info!("Wifi event: {:?}", parsed_event);
+            if let WifiEvent::StaDisconnected = parsed_event {
+                blocking_wifi.connect_with_retry().unwrap();
+            }
         }
     })?;
 
@@ -145,7 +149,8 @@ fn main() -> Result<()> {
             clock.lock().unwrap().sync();
         }
     })?;
-    clock_sync_timer.every(Duration::from_secs(60))?;
+    let one_hour_secs = 60 * 60;
+    clock_sync_timer.every(Duration::from_secs(one_hour_secs))?;
 
     let state = State {
         measured_data: MeasuredData::default(),

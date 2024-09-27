@@ -1,19 +1,22 @@
-use embedded_svc::http::server::{Connection, HandlerError, Request};
+use embedded_svc::http::server::{Connection, Request};
 use embedded_svc::io::Write;
 use serde::Serialize;
 use serde_json::Result;
 
-pub trait SendJson {
-    fn send_json<T>(self, json: &T) -> anyhow::Result<(), HandlerError>
+pub trait SendJson<C>
+where
+    C: Connection,
+{
+    fn send_json<T>(self, json: &T) -> std::result::Result<(), C::Error>
     where
         T: ?Sized + Serialize;
 }
 
-impl<C> SendJson for Request<C>
+impl<C> SendJson<C> for Request<C>
 where
     C: Connection,
 {
-    fn send_json<T>(self, json: &T) -> anyhow::Result<(), HandlerError>
+    fn send_json<T>(self, json: &T) -> std::result::Result<(), C::Error>
     where
         T: ?Sized + Serialize,
     {
