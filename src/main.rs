@@ -1,7 +1,7 @@
 use anyhow::*;
 use embedded_svc::http::Method;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
-use esp_idf_svc::hal::prelude::Peripherals;
+use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::http::server::EspHttpServer;
 use esp_idf_svc::timer::EspTaskTimerService;
 use esp_idf_svc::wifi::WifiEvent;
@@ -130,7 +130,7 @@ fn main() -> Result<()> {
     let _wifi_reconnect_sub = sysloop.subscribe::<WifiEvent, _>({
         move |parsed_event| {
             log::info!("Wifi event: {:?}", parsed_event);
-            if let WifiEvent::StaDisconnected = parsed_event {
+            if let WifiEvent::StaDisconnected(_) = parsed_event {
                 blocking_wifi.connect_with_retry().unwrap();
             }
         }
@@ -173,6 +173,10 @@ fn main() -> Result<()> {
     })?;
     night_mode_timer.every(Duration::from_secs(60))?;
 
+    if !logging::is_enabled() {
+        info!("LOG_URL or LOG_API_KEY not set, data logging disabled");
+    }
+
     loop {
         // Get fresh air
         board.fan.enable().unwrap();
@@ -199,9 +203,11 @@ fn main() -> Result<()> {
         leds.write().unwrap().visualize_measures(co2, pm25);
 
         // Log data
-        match logging::log_data(&logging::LogEntry::new(co2, pm25)) {
-            Ok(_) => info!("Data logged successfully"),
-            Err(e) => error!("Error logging data: {}", e),
+        if logging::is_enabled() {
+            match logging::log_data(&logging::LogEntry::new(co2, pm25)) {
+                Ok(_) => info!("Data logged successfully"),
+                Err(e) => error!("Error logging data: {}", e),
+            }
         }
 
         sleep_ms(50_000);

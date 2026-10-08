@@ -1,4 +1,4 @@
-use esp_idf_svc::hal::{gpio::OutputPin, peripheral::Peripheral, rmt::RmtChannel};
+use esp_idf_svc::hal::{gpio::OutputPin, rmt::RmtChannel};
 use smart_leds_trait::{SmartLedsWrite, RGB8};
 use ws2812_esp32_rmt_driver::{driver::color::LedPixelColorGrb24, LedPixelEsp32Rmt};
 
@@ -68,10 +68,7 @@ pub struct Leds {
 pub const INITIAL_BRIGHTNESS: u8 = 20;
 
 impl Leds {
-    pub fn new<C: RmtChannel>(
-        channel: impl Peripheral<P = C> + 'static,
-        pin: impl Peripheral<P = impl OutputPin> + 'static,
-    ) -> Self {
+    pub fn new<C: RmtChannel + 'static>(channel: C, pin: impl OutputPin + 'static) -> Self {
         let driver = LedPixelEsp32Rmt::<RGB8, LedPixelColorGrb24>::new(channel, pin).unwrap();
         Self {
             driver,

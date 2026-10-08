@@ -9,8 +9,22 @@ use serde::Serialize;
 
 use esp_idf_svc::http::client::{Configuration, EspHttpConnection};
 
-const URL: &str = env!("LOG_URL");
-const API_KEY: &str = env!("LOG_API_KEY");
+// Optional - when either one is missing, data logging is disabled
+const URL: Option<&str> = option_env!("LOG_URL");
+const API_KEY: Option<&str> = option_env!("LOG_API_KEY");
+
+fn config() -> Option<(&'static str, &'static str)> {
+    match (URL, API_KEY) {
+        (Some(url), Some(api_key)) if !url.is_empty() && !api_key.is_empty() => {
+            Some((url, api_key))
+        }
+        _ => None,
+    }
+}
+
+pub fn is_enabled() -> bool {
+    config().is_some()
+}
 
 #[derive(Serialize)]
 pub struct LogEntry {
@@ -60,6 +74,10 @@ fn print_response(response: &mut impl Read) -> Result<()> {
 }
 
 pub fn log_data(log_entry: &LogEntry) -> Result<()> {
+    let Some((url, api_key)) = config() else {
+        return Ok(());
+    };
+
     // 1. Create a new EspHttpClient. (Check documentation)
     // ANCHOR: connection
     let connection = EspHttpConnection::new(&Configuration {
@@ -71,8 +89,8 @@ pub fn log_data(log_entry: &LogEntry) -> Result<()> {
     let mut client = Client::wrap(connection);
 
     // 2. Open a GET request to `url`
-    let headers = [("content-type", "application/json"), ("apikey", API_KEY)];
-    let mut request = client.request(Method::Post, URL.as_ref(), &headers)?;
+    let headers = [("content-type", "application/json"), ("apikey", api_key)];
+    let mut request = client.request(Method::Post, url, &headers)?;
 
     let payload = serde_json::to_string(&log_entry)?;
     request.write_all(payload.as_bytes())?;

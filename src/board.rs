@@ -12,11 +12,11 @@ pub struct Board {
     pub scd41: Scd41<I2cDriver<'static>, delay::FreeRtos>,
     pub pm1006: Pm1006<UartDriver<'static>>,
     pub leds: Leds,
-    pub fan: Fan<'static, gpio::Gpio12>,
+    pub fan: Fan<'static>,
 }
 
 impl Board {
-    pub fn new(pins: Pins, i2c1: I2C1, uart1: UART1, rmt: RMT) -> Self {
+    pub fn new(pins: Pins, i2c1: I2C1<'static>, uart1: UART1<'static>, rmt: RMT) -> Self {
         // Fan
         let fan_pin = PinDriver::output(pins.gpio12).unwrap();
         let fan = Fan::new(fan_pin);
@@ -33,8 +33,8 @@ impl Board {
             uart1,
             pins.gpio17,
             pins.gpio16,
-            Option::<gpio::Gpio0>::None,
-            Option::<gpio::Gpio1>::None,
+            Option::<gpio::Gpio0<'static>>::None,
+            Option::<gpio::Gpio1<'static>>::None,
             &config,
         )
         .unwrap();

@@ -1,15 +1,12 @@
-use esp_idf_svc::hal::gpio::{Output, Pin, PinDriver};
+use esp_idf_svc::hal::gpio::{Output, PinDriver};
 use esp_idf_svc::sys::EspError;
 
-pub struct Fan<'a, PIN: Pin> {
-    pin: PinDriver<'a, PIN, Output>,
+pub struct Fan<'a> {
+    pin: PinDriver<'a, Output>,
 }
 
-impl<'a, PIN> Fan<'a, PIN>
-where
-    PIN: Pin,
-{
-    pub fn new(pin: PinDriver<'a, PIN, Output>) -> Self {
+impl<'a> Fan<'a> {
+    pub fn new(pin: PinDriver<'a, Output>) -> Self {
         Self { pin }
     }
 

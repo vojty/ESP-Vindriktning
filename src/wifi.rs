@@ -1,5 +1,5 @@
 use embedded_svc::wifi::{ClientConfiguration, Configuration};
-use esp_idf_svc::hal::peripheral;
+use esp_idf_svc::hal::modem::WifiModemPeripheral;
 use esp_idf_svc::sys::esp_wifi_set_max_tx_power;
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop,
@@ -53,7 +53,7 @@ impl WifiConnectFix for BlockingWifi<EspWifi<'_>> {
 
 // https://github.com/ivmarkov/rust-esp32-std-demo/blob/main/src/main.rs#L1266
 pub fn wifi(
-    modem: impl peripheral::Peripheral<P = esp_idf_svc::hal::modem::Modem> + 'static,
+    modem: impl WifiModemPeripheral + 'static,
     sysloop: EspSystemEventLoop,
 ) -> anyhow::Result<BlockingWifi<EspWifi<'static>>> {
     let esp_wifi = EspWifi::new(modem, sysloop.clone(), None)?;
