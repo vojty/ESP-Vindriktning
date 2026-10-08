@@ -23,6 +23,34 @@ Upgraded Ikea Vindriktning with ESP32
 3. sleep for 50 seconds
 4. repeat
 
+## LEDs
+
+Top LED shows CO2, bottom LED PM2.5, center LED a mix of both.
+
+| Color | CO2 (ppm) | PM2.5 (µg/m³) |
+|---|---|---|
+| aqua | ≤ 400 | – |
+| green | ≤ 1000 | ≤ 12 |
+| yellow | ≤ 1500 | ≤ 35 |
+| orange | ≤ 2000 | ≤ 55 |
+| red | > 2000 | ≤ 150 |
+| dark red | – | > 150 |
+
+### Status and errors
+
+**Blinking always means something needs attention.** Blue is used only for errors.
+
+| LEDs | Meaning |
+|---|---|
+| all magenta | booting / connecting to WiFi |
+| white | waiting for the first reading |
+| top/bottom blinking in its color | 2–4 failed reads in a row, showing the last good value |
+| top/bottom blinking blue | 5+ failed reads in a row (~5 min), sensor needs attention |
+| center blinking | WiFi disconnected or clock never synced |
+| all blinking blue | both sensors failed |
+
+A single failed read is ignored. Blinking LEDs stay visible in night mode. `GET /data` also returns `co2_status` / `pm25_status` with `failures` (consecutive) and `health` (`waiting`, `ok`, `stale`, `failed`).
+
 ## REST API
 
 TODO

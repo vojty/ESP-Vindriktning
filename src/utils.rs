@@ -42,6 +42,21 @@ const DARK_RED: Color = Color {
     brightness: None,
 };
 
+// Status colors, not used for measured values
+pub const WHITE: Color = Color {
+    r: 255,
+    g: 255,
+    b: 255,
+    brightness: None,
+};
+
+pub const BLUE: Color = Color {
+    r: 0,
+    g: 0,
+    b: 255,
+    brightness: None,
+};
+
 pub fn sleep_ms(ms: u64) {
     thread::sleep(Duration::from_millis(ms));
 }

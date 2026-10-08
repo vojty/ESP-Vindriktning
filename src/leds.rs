@@ -2,7 +2,8 @@ use esp_idf_svc::hal::{gpio::OutputPin, rmt::RmtChannel};
 use smart_leds_trait::{SmartLedsWrite, RGB8};
 use ws2812_esp32_rmt_driver::{driver::color::LedPixelColorGrb24, LedPixelEsp32Rmt};
 
-use crate::utils::{get_co2_color, get_pm25_color};
+use crate::status::Health;
+use crate::utils::{get_co2_color, get_pm25_color, BLUE, WHITE};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color {
@@ -61,11 +62,17 @@ pub enum LedPosition {
 
 pub struct Leds {
     colors: [Color; 3],
+    // LEDs that blink to signal a problem
+    blink: [bool; 3],
+    // Current blink phase, toggled by `toggle_blink`
+    blink_on: bool,
     driver: LedPixelEsp32Rmt<'static, RGB8, LedPixelColorGrb24>,
     brightness: u8,
 }
 
 pub const INITIAL_BRIGHTNESS: u8 = 20;
+// Blinking LEDs stay visible even in night mode
+const BLINK_MIN_BRIGHTNESS: u8 = 5;
 
 impl Leds {
     pub fn new<C: RmtChannel + 'static>(channel: C, pin: impl OutputPin + 'static) -> Self {
@@ -73,12 +80,33 @@ impl Leds {
         Self {
             driver,
             colors: [Color::default(); 3],
+            blink: [false; 3],
+            blink_on: true,
             brightness: INITIAL_BRIGHTNESS,
         }
     }
 
     pub fn flush(&mut self) -> Result<(), ws2812_esp32_rmt_driver::Ws2812Esp32RmtDriverError> {
-        self.driver.write(self.colors.iter().cloned())
+        let blink_on = self.blink_on;
+        let colors = self.colors.iter().zip(self.blink).map(|(color, blink)| {
+            if !blink {
+                *color
+            } else if blink_on {
+                let brightness = color.brightness.unwrap_or(255).max(BLINK_MIN_BRIGHTNESS);
+                color.brightness(brightness)
+            } else {
+                Color::default() // off
+            }
+        });
+        self.driver.write(colors)
+    }
+
+    /// Switches the blink phase, called periodically from a timer
+    pub fn toggle_blink(&mut self) {
+        self.blink_on = !self.blink_on;
+        if self.blink.contains(&true) {
+            self.flush().unwrap();
+        }
     }
 
     pub fn set_brightness(&mut self, brightness: u8) -> &mut Leds {
@@ -89,10 +117,18 @@ impl Leds {
         self
     }
 
-    pub fn set_color(&mut self, position: LedPosition, mut color: Color) -> &mut Leds {
-        color = color.brightness(self.brightness);
+    pub fn set_color(&mut self, position: LedPosition, color: Color) -> &mut Leds {
+        self.set_blinking_color(position, color, false)
+    }
 
-        self.colors[position as usize] = color;
+    pub fn set_blinking_color(
+        &mut self,
+        position: LedPosition,
+        color: Color,
+        blink: bool,
+    ) -> &mut Leds {
+        self.colors[position as usize] = color.brightness(self.brightness);
+        self.blink[position as usize] = blink;
         self
     }
 
@@ -112,21 +148,55 @@ impl Leds {
     }
 
     pub fn set_waiting_color(&mut self) {
-        let waiting_color = Color::new(0, 255, 255); // cyan
-        self.set_color(LedPosition::Top, waiting_color)
-            .set_color(LedPosition::Bottom, waiting_color)
-            .set_color(LedPosition::Center, waiting_color)
+        self.set_color(LedPosition::Top, WHITE)
+            .set_color(LedPosition::Bottom, WHITE)
+            .set_color(LedPosition::Center, WHITE)
             .flush()
             .unwrap();
     }
 
-    pub fn visualize_measures(&mut self, co2: u16, pm25: u16) {
+    /// Top LED shows CO2, bottom PM2.5 and center a mix of both.
+    /// Problems are signalled by blinking, see README.
+    pub fn visualize_measures(
+        &mut self,
+        (co2, co2_health): (u16, Health),
+        (pm25, pm25_health): (u16, Health),
+        system_ok: bool,
+    ) {
         let co2_color = get_co2_color(co2);
         let pm25_color = get_pm25_color(pm25);
-        self.set_color(LedPosition::Top, co2_color)
-            .set_color(LedPosition::Center, pm25_color.mix(&co2_color))
-            .set_color(LedPosition::Bottom, pm25_color)
+
+        // Center mixes only sensors with a usable value
+        let usable = |color: Color, health| match health {
+            Health::Ok | Health::Stale => Some(color),
+            Health::Waiting | Health::Failed => None,
+        };
+        let center_color = match (
+            usable(co2_color, co2_health),
+            usable(pm25_color, pm25_health),
+        ) {
+            (Some(co2), Some(pm25)) => Some(co2.mix(&pm25)),
+            (co2, pm25) => co2.or(pm25),
+        };
+        let center = match (co2_health, pm25_health, center_color) {
+            (Health::Failed, Health::Failed, _) => (BLUE, true),
+            (_, _, Some(color)) => (color, !system_ok),
+            (_, _, None) => (WHITE, !system_ok),
+        };
+
+        self.set_led(LedPosition::Top, co2_color, co2_health)
+            .set_blinking_color(LedPosition::Center, center.0, center.1)
+            .set_led(LedPosition::Bottom, pm25_color, pm25_health)
             .flush()
             .unwrap();
+    }
+
+    fn set_led(&mut self, position: LedPosition, color: Color, health: Health) -> &mut Leds {
+        match health {
+            Health::Waiting => self.set_color(position, WHITE),
+            Health::Ok => self.set_color(position, color),
+            Health::Stale => self.set_blinking_color(position, color, true),
+            Health::Failed => self.set_blinking_color(position, BLUE, true),
+        }
     }
 }

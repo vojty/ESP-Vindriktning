@@ -18,9 +18,41 @@ const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
  */
 pub trait WifiConnectFix {
     fn connect_with_retry(&mut self) -> anyhow::Result<()>;
+    fn ensure_connected(&mut self) -> anyhow::Result<bool>;
 }
 
 impl WifiConnectFix for BlockingWifi<EspWifi<'_>> {
+    /**
+     * Makes a single reconnect attempt if the connection was lost.
+     * Returns true if a reconnect happened.
+     *
+     * Must not be called from the system event loop (e.g. a WifiEvent subscription),
+     * as the blocking calls wait for events delivered by that same loop.
+     */
+    fn ensure_connected(&mut self) -> anyhow::Result<bool> {
+        if self.is_connected()? {
+            if !self.wifi().sta_netif().is_up()? {
+                info!("Waiting for DHCP lease...");
+                self.wait_netif_up()?;
+                return Ok(true);
+            }
+            return Ok(false);
+        }
+
+        warn!("Wifi disconnected, reconnecting...");
+        if let Err(e) = self.connect() {
+            // reset the driver, see connect_with_retry
+            self.stop()?;
+            self.start()?;
+            return Err(e.into());
+        }
+
+        info!("Waiting for DHCP lease...");
+        self.wait_netif_up()?;
+        info!("Wifi reconnected");
+        Ok(true)
+    }
+
     fn connect_with_retry(&mut self) -> anyhow::Result<()> {
         let mut retry_delay_ms = 1_000;
         loop {

@@ -1,6 +1,6 @@
 use log::*;
 use sntp_request::SntpRequest;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use time::OffsetDateTime;
 use time_tz::{timezones, OffsetDateTimeExt, TimeZone, Tz};
 
@@ -29,18 +29,25 @@ impl Clock {
     pub fn sync(&mut self) {
         // sync with remote server
         let result = self.sntp.get_unix_time(); // in seconds
-        self.last_update = Some(Instant::now());
 
         // update the local timestamp
+        // on failure keep the previous reference point, otherwise the clock would jump back
         match result {
             Ok(timestamp) => {
                 info!("Sync successful, timestamp: {}", timestamp);
                 self.timestamp = timestamp;
+                self.last_update = Some(Instant::now());
             }
             Err(e) => {
                 error!("Sync failed: {:?}", e);
             }
         }
+    }
+
+    /// True if the clock was never synced or the last successful sync is older than `max_age`
+    pub fn needs_sync(&self, max_age: Duration) -> bool {
+        self.last_update
+            .map_or(true, |last_update| last_update.elapsed() >= max_age)
     }
 
     pub fn get_unix_timestamp(&self) -> Option<i64> {

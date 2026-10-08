@@ -6,11 +6,12 @@ use pm1006::pm1006::Pm1006;
 
 use crate::fan::Fan;
 use crate::leds::Leds;
+use crate::pm_uart::PmUart;
 use crate::scd41::Scd41;
 
 pub struct Board {
     pub scd41: Scd41<I2cDriver<'static>, delay::FreeRtos>,
-    pub pm1006: Pm1006<UartDriver<'static>>,
+    pub pm1006: Pm1006<PmUart>,
     pub leds: Leds,
     pub fan: Fan<'static>,
 }
@@ -39,13 +40,8 @@ impl Board {
         )
         .unwrap();
 
-        // Clear RX buffer to avoid reading old data
-        match uart_driver.clear_rx() {
-            Ok(_) => log::info!("Cleared RX buffer"),
-            Err(e) => log::warn!("Failed to clear RX buffer: {}", e),
-        }
-
-        let pm1006 = Pm1006::new(uart_driver);
+        // PmUart clears the RX buffer before each request and adds a read timeout
+        let pm1006 = Pm1006::new(PmUart::new(uart_driver));
 
         // LEDs
         let led_pin = pins.gpio25;
