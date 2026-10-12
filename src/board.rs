@@ -1,5 +1,5 @@
 use esp_idf_svc::hal::{
-    delay, gpio, gpio::PinDriver, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1, rmt::RMT,
+    delay, gpio, gpio::PinDriver, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1,
     uart::UartConfig, uart::UartDriver, uart::UART1, units::Hertz, units::KiloHertz,
 };
 use pm1006::pm1006::Pm1006;
@@ -17,7 +17,7 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new(pins: Pins, i2c1: I2C1<'static>, uart1: UART1<'static>, rmt: RMT) -> Self {
+    pub fn new(pins: Pins, i2c1: I2C1<'static>, uart1: UART1<'static>) -> Self {
         // Fan
         let fan_pin = PinDriver::output(pins.gpio12).unwrap();
         let fan = Fan::new(fan_pin);
@@ -45,8 +45,7 @@ impl Board {
 
         // LEDs
         let led_pin = pins.gpio25;
-        let led_channel = rmt.channel0;
-        let mut leds = Leds::new(led_channel, led_pin);
+        let mut leds = Leds::new(led_pin);
         leds.set_brightness(20);
 
         Self {

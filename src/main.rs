@@ -160,12 +160,11 @@ fn main() -> Result<()> {
         pins,
         i2c1,
         uart1,
-        rmt,
         ..
     } = peripherals;
 
     // Create board
-    let mut board = Board::new(pins, i2c1, uart1, rmt);
+    let mut board = Board::new(pins, i2c1, uart1);
     board.init();
 
     // Init color
