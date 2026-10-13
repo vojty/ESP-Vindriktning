@@ -32,6 +32,7 @@ mod fan;
 mod http;
 mod leds;
 mod logging;
+mod ota;
 mod pm_sampler;
 mod pm_uart;
 mod scd41;
@@ -89,7 +90,17 @@ fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpSe
         // panic will cause a restart of the device
         panic!("User requested a restart!")
     })?;
+
+    server.fn_handler("/firmware", Method::Get, ota::handle_info)?;
+    server.fn_handler("/ota", Method::Post, ota::handle_update)?;
     Ok(server)
+}
+
+// Firmware version and build time, reported by `GET /firmware`
+// (the default from ESP-IDF only changes when ESP-IDF itself is rebuilt)
+#[allow(unexpected_cfgs)] // the macro uses cfgs set by esp-idf-sys
+mod app_desc {
+    esp_idf_svc::sys::esp_app_desc! {}
 }
 
 const HISTORY_LENGTH: usize = 5;
@@ -241,6 +252,11 @@ fn main() -> Result<()> {
     let state = Arc::new(RwLock::new(state));
     let leds = Arc::new(RwLock::new(board.leds));
     let _server = httpd(state.clone(), leds.clone())?;
+
+    // WiFi and the HTTP server are up, so the next update can be installed, keep this firmware
+    if let Err(e) = ota::mark_running_slot_valid() {
+        error!("Failed to mark firmware as valid: {:?}", e);
+    }
 
     // Blink LEDs signalling a problem
     let blink_timer = EspTaskTimerService::new()?.timer({

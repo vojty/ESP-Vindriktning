@@ -114,6 +114,31 @@ Restarts the device.
 curl -X POST http://<device-ip>/restart
 ```
 
+### `GET /firmware`
+
+The running firmware and whether an OTA update was rolled back.
+
+```sh
+curl http://<device-ip>/firmware
+```
+
+```json
+{
+  "running": { "partition": "ota_1", "version": "0.1.0", "released": "2026-10-13 20:33:50" },
+  "rolled_back": null
+}
+```
+
+`released` is the build time (UTC). `rolled_back` is the partition of the last update that failed to start, `null` if none did.
+
+### `POST /ota`
+
+Installs a firmware image (`make bin`) and restarts into it, see [OTA updates](#ota-updates).
+
+```sh
+curl --data-binary @target/firmware.bin http://<device-ip>/ota
+```
+
 ### Remote logging (optional)
 
 When `LOG_URL` and `LOG_API_KEY` are set, every measurement with both values is `POST`ed to `LOG_URL` as `{"co2": 812, "pm25": 6}` with an `apikey` header.
@@ -176,10 +201,25 @@ cargo build --release
 make flash   # build, flash and open the serial monitor
 make monitor # serial monitor only
 make bin     # save firmware image to target/firmware.bin
+make ota DEVICE=<device-ip> # build and install over WiFi, see below
 ```
+
+`make flash` uses the bootloader built by ESP-IDF (with rollback enabled) instead of espflash's bundled one, and resets the OTA state so the device boots the flashed firmware.
+
+### OTA updates
+
+The flash (4 MB) has two app partitions, `ota_0` and `ota_1`. An update is written to the one that isn't running, and the device restarts into it.
+
+1. The first firmware with OTA support (or with a changed partition table) has to be flashed over USB with `make flash`.
+2. `make ota DEVICE=<device-ip>` builds the image and uploads it.
+3. `GET /firmware` shows the build time of the running firmware.
+
+**Rollback:** a new firmware is kept once it connects to WiFi and starts the HTTP server. If it crashes before that, the bootloader returns to the previous firmware on the next restart and `GET /firmware` reports it in `rolled_back`. A firmware that hangs instead of crashing is not detected (the watchdogs are disabled), unplug the device to restart it.
+
+`POST /ota` has no authentication, anyone on your network can install their own firmware.
 
 ## Notes
 
-- binary larger than 1 MB won't flash without `partition.csv` file (1MB is probably a default value)
+- `partitions.csv` assumes 4 MB flash with two ~1.9 MB app partitions. Large dependencies can quickly fill that up (a timezone database added 1.4 MB once, `build.rs` resolves `TIMEZONE` at build time instead).
 
 - `opt-level = "s"` is currenty broken in `rustc 1.65.0` (miscompilation issues)
