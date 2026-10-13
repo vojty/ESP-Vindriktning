@@ -5,7 +5,7 @@ use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::http::server::EspHttpServer;
 use esp_idf_svc::timer::EspTaskTimerService;
 use log::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::result::Result::Ok;
 use std::sync::Arc;
@@ -16,6 +16,8 @@ use time::OffsetDateTime;
 
 use board::Board;
 use clock::Clock;
+use embedded_svc::io::Write;
+use fan::INITIAL_FAN_SPEED;
 use http::BodyParser;
 use http::SendJson;
 use leds::Leds;
@@ -48,14 +50,38 @@ fn httpd(state: Arc<RwLock<State>>, leds: Arc<RwLock<Leds>>) -> Result<EspHttpSe
         }
     })?;
 
-    server.fn_handler::<anyhow::Error, _>("/brightness", Method::Put, move |mut req| {
-        let brightness: u8 = req.parse_body().unwrap();
-        state.write().unwrap().settings.brightness = brightness;
-        info!("Brightness set to {}", brightness);
-        let mut leds = leds.write().unwrap();
-        leds.set_brightness(brightness).flush().unwrap();
+    server.fn_handler::<anyhow::Error, _>("/settings", Method::Put, move |mut req| {
+        let update: SettingsUpdate = match req.parse_body() {
+            Ok(update) => update,
+            Err(e) => {
+                req.into_status_response(400)?
+                    .write_all(e.to_string().as_bytes())?;
+                return Ok(());
+            }
+        };
+        if update.fan_speed.is_some_and(|speed| speed > 100) {
+            req.into_status_response(400)?
+                .write_all(b"fan_speed must be 0-100")?;
+            return Ok(());
+        }
 
-        req.into_ok_response().unwrap();
+        let mut state = state.write().unwrap();
+        if let Some(brightness) = update.brightness {
+            state.settings.brightness = brightness;
+            info!("Brightness set to {}", brightness);
+            leds.write()
+                .unwrap()
+                .set_brightness(brightness)
+                .flush()
+                .unwrap();
+        }
+        if let Some(fan_speed) = update.fan_speed {
+            // Applied by the main loop on the next fan run
+            state.settings.fan_speed = fan_speed;
+            info!("Fan speed set to {}%", fan_speed);
+        }
+
+        req.send_json(&state.settings)?;
         Ok(())
     })?;
 
@@ -111,9 +137,20 @@ impl MeasuredData {
     }
 }
 
+/// Runtime settings, reset to defaults on restart
 #[derive(Serialize)]
 struct Settings {
     brightness: u8,
+    /// Fan speed in percent
+    fan_speed: u8,
+}
+
+/// Body of `PUT /settings`, only the present fields are changed
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SettingsUpdate {
+    brightness: Option<u8>,
+    fan_speed: Option<u8>,
 }
 
 #[derive(Serialize)]
@@ -161,11 +198,12 @@ fn main() -> Result<()> {
         pins,
         i2c1,
         uart1,
+        ledc,
         ..
     } = peripherals;
 
     // Create board
-    let mut board = Board::new(pins, i2c1, uart1);
+    let mut board = Board::new(pins, i2c1, uart1, ledc.timer0, ledc.channel0);
     board.init();
 
     // Init color
@@ -197,6 +235,7 @@ fn main() -> Result<()> {
         measured_data: MeasuredData::default(),
         settings: Settings {
             brightness: INITIAL_BRIGHTNESS,
+            fan_speed: INITIAL_FAN_SPEED,
         },
     };
     let state = Arc::new(RwLock::new(state));
@@ -241,6 +280,8 @@ fn main() -> Result<()> {
         };
 
         // Get fresh air
+        let fan_speed = state.read().unwrap().settings.fan_speed;
+        board.fan.set_speed(fan_speed);
         board.fan.enable().unwrap();
         sleep_ms(10_000);
         board.fan.disable().unwrap();

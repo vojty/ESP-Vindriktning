@@ -1,6 +1,7 @@
 use esp_idf_svc::hal::{
-    delay, gpio, gpio::PinDriver, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1,
-    uart::UartConfig, uart::UartDriver, uart::UART1, units::Hertz, units::KiloHertz,
+    delay, gpio, gpio::Pins, i2c::I2cConfig, i2c::I2cDriver, i2c::I2C1, ledc::config::TimerConfig,
+    ledc::LedcDriver, ledc::LedcTimerDriver, ledc::CHANNEL0, ledc::TIMER0, uart::UartConfig,
+    uart::UartDriver, uart::UART1, units::Hertz, units::KiloHertz,
 };
 use pm1006::pm1006::Pm1006;
 
@@ -17,10 +18,18 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new(pins: Pins, i2c1: I2C1<'static>, uart1: UART1<'static>) -> Self {
-        // Fan
-        let fan_pin = PinDriver::output(pins.gpio12).unwrap();
-        let fan = Fan::new(fan_pin);
+    pub fn new(
+        pins: Pins,
+        i2c1: I2C1<'static>,
+        uart1: UART1<'static>,
+        fan_timer: TIMER0<'static>,
+        fan_channel: CHANNEL0<'static>,
+    ) -> Self {
+        // Fan, PWM frequency above the audible range to avoid coil whine
+        let config = TimerConfig::new().frequency(KiloHertz(25).into());
+        let timer = LedcTimerDriver::new(fan_timer, &config).unwrap();
+        let pwm = LedcDriver::new(fan_channel, &timer, pins.gpio12).unwrap();
+        let fan = Fan::new(pwm, timer);
 
         // SCD41
         let config = I2cConfig::default().baudrate(KiloHertz(100).into());

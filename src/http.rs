@@ -43,13 +43,12 @@ where
     where
         T: serde::de::DeserializeOwned,
     {
-        // get content length
+        // get content length, a missing body fails parsing below
         let length = self
             .connection()
             .header("Content-Length")
-            .unwrap()
-            .parse::<usize>()
-            .unwrap();
+            .and_then(|length| length.parse::<usize>().ok())
+            .unwrap_or(0);
 
         // allocate buffer
         let mut buffer = vec![0; length];

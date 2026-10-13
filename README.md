@@ -20,7 +20,7 @@ Upgraded Ikea Vindriktning with ESP32
 
 ## Lifecycle
 
-1. turn on the fan for 10 seconds to get fresh air
+1. turn on the fan for 10 seconds to get fresh air (speed is adjustable, see `PUT /settings`)
 2. measure CO2 & PM2.5 (PM2.5 is read 6× 1 s apart, the median filters out sporadic spikes)
 3. sleep for 50 seconds
 4. repeat
@@ -89,12 +89,21 @@ curl http://<device-ip>/data
 | `*_status.failures` | consecutive failed reads |
 | `*_status.health` | `waiting`, `ok`, `stale` (2+ failures) or `failed` (5+ failures) |
 
-### `PUT /brightness`
+### `PUT /settings`
 
-Sets LED brightness (`0`–`255`, JSON number in the body). Once the clock is synced, the night mode schedule (checked every minute) resets it to 20 by day / 1 by night.
+Changes runtime settings. The JSON body may contain any of the fields below; omitted fields are left unchanged. The response contains the current settings. Settings are not persisted and reset to defaults on restart.
+
+| Field | Range | Default | Description |
+|---|---|---|---|
+| `brightness` | `0`–`255` | `20` | LED brightness. Once the clock is synced, the night mode schedule (checked every minute) resets it to 20 by day / 1 by night. |
+| `fan_speed` | `0`–`100` | `100` | Fan speed in percent (25 kHz PWM), applied from the next fan run. Very low values may not be enough to spin the fan up. |
 
 ```sh
-curl -X PUT -H "Content-Type: application/json" -d 20 http://<device-ip>/brightness
+curl -X PUT -H "Content-Type: application/json" -d '{"fan_speed": 60}' http://<device-ip>/settings
+```
+
+```json
+{ "brightness": 20, "fan_speed": 60 }
 ```
 
 ### `POST /restart`
