@@ -34,9 +34,9 @@ smart-leds-trait = "0.3.2"
 sntp_request = "2.0.1"
 pm1006 = "0.0.4"
 time = { version = "0.3.55", features = ["serde-well-known"] }
-time-tz = { version = "2.0.0", features = ["db"] }
 ws2812-esp32-rmt-driver = { git = "https://github.com/vojty/ws2812-esp32-rmt-driver.git", branch = "update-esp-idf-deps", features = ["smart-leds-trait"] }
 
 [build-dependencies]
-dotenv-build = "0.1.1"
+dotenvy = "0.15.7"
 embuild = "0.33.5"
+tzdb_data = "0.2.5"
