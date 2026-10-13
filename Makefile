@@ -26,9 +26,12 @@ monitor:
 ota:
 	@test -n "$(DEVICE)" || (echo "Usage: make ota DEVICE=<device-ip>" && exit 1)
 	$(MAKE) bin
-	curl --fail-with-body \
+	@# curl only shows the progress bar when the response isn't written to the terminal
+	@curl --fail-with-body --progress-bar \
 		-H "Content-Type: application/octet-stream" \
 		--data-binary @target/firmware.bin \
-		http://$(DEVICE)/ota
+		-o target/ota-response.txt \
+		http://$(DEVICE)/ota; \
+	status=$$?; cat target/ota-response.txt; echo; exit $$status
 
 .PHONY: bin flash monitor ota
