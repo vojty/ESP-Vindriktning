@@ -30,6 +30,7 @@ mod fan;
 mod http;
 mod leds;
 mod logging;
+mod pm_sampler;
 mod pm_uart;
 mod scd41;
 mod status;
@@ -251,9 +252,8 @@ fn main() -> Result<()> {
             .read_co2()
             .map_err(|e| error!("Error reading CO2: {:?}", e))
             .ok();
-        let pm25 = board
-            .pm1006
-            .read_pm25()
+        // Median of several readings filters out sporadic spikes
+        let pm25 = pm_sampler::read_median(|| board.pm1006.read_pm25())
             .map_err(|e| error!("Error reading PM2.5: {}", e))
             .ok();
         info!("CO2: {:?} ppm, PM2.5: {:?} ug/m3", co2, pm25);

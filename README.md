@@ -21,7 +21,7 @@ Upgraded Ikea Vindriktning with ESP32
 ## Lifecycle
 
 1. turn on the fan for 10 seconds to get fresh air
-2. measure C02 & PM2.5
+2. measure CO2 & PM2.5 (PM2.5 is read 6× 1 s apart, the median filters out sporadic spikes)
 3. sleep for 50 seconds
 4. repeat
 
