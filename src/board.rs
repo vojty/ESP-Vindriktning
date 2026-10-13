@@ -25,8 +25,9 @@ impl Board {
         fan_timer: TIMER0<'static>,
         fan_channel: CHANNEL0<'static>,
     ) -> Self {
-        // Fan, PWM frequency above the audible range to avoid coil whine
-        let config = TimerConfig::new().frequency(KiloHertz(25).into());
+        // Fan, 2-wire so PWM switches its supply. At high frequencies the fan's own
+        // driver IC doesn't get enough power to run, use low-frequency PWM instead
+        let config = TimerConfig::new().frequency(Hertz(100));
         let timer = LedcTimerDriver::new(fan_timer, &config).unwrap();
         let pwm = LedcDriver::new(fan_channel, &timer, pins.gpio12).unwrap();
         let fan = Fan::new(pwm, timer);

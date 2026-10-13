@@ -96,7 +96,7 @@ Changes runtime settings. The JSON body may contain any of the fields below; omi
 | Field | Range | Default | Description |
 |---|---|---|---|
 | `brightness` | `0`–`255` | `20` | LED brightness. Once the clock is synced, the night mode schedule (checked every minute) resets it to 20 by day / 1 by night. |
-| `fan_speed` | `0`–`100` | `100` | Fan speed in percent (25 kHz PWM), applied from the next fan run. Very low values may not be enough to spin the fan up. |
+| `fan_speed` | `0`–`100` | `60` | Fan speed in percent (100 Hz PWM), applied from the next fan run. The fan starts at full speed for 1 s, then slows down. Very low values may not be enough to keep it spinning. |
 
 ```sh
 curl -X PUT -H "Content-Type: application/json" -d '{"fan_speed": 60}' http://<device-ip>/settings
